@@ -1,75 +1,55 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from searcher import SearchEngine
-from cachetools import TTLCache
 import time
 
 app = Flask(__name__)
-CORS(app)  # Herkese açık API
+CORS(app)
 
-# Önbellek (5 dakika)
-cache = TTLCache(maxsize=100, ttl=300)
+# Arama motorunu başlat
 search_engine = SearchEngine()
 
 @app.route('/')
 def home():
     return jsonify({
-        'name': 'GitHub Search API',
+        'name': 'Search API',
         'version': '1.0',
-        'status': 'online',
+        'status': 'running',
         'endpoints': {
-            '/search': 'GET - Arama yapar',
+            '/search': 'GET - Arama yapar (q=kelime)',
             '/health': 'GET - Sağlık kontrolü'
         }
     })
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'healthy', 'timestamp': time.time()})
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': time.time()
+    })
 
 @app.route('/search')
 def search():
     query = request.args.get('q', '').strip()
-    page = int(request.args.get('page', 1))
     
     if not query:
-        return jsonify({'error': 'Sorgu gerekli'}), 400
-    
-    # Önbellek kontrolü
-    cache_key = f"{query}:{page}"
-    if cache_key in cache:
         return jsonify({
-            'query': query,
-            'page': page,
-            'results': cache[cache_key],
-            'cached': True,
-            'source': 'GitHub API'
-        })
+            'error': 'Arama sorgusu gerekli',
+            'results': []
+        }), 400
     
-    # Gerçek arama
+    page = int(request.args.get('page', 1))
+    
+    # Arama yap
     results = search_engine.search(query, page)
-    
-    # Önbelleğe al
-    cache[cache_key] = results
     
     return jsonify({
         'query': query,
         'page': page,
+        'total': len(results),
         'results': results,
-        'cached': False,
-        'source': 'GitHub API',
-        'total': len(results)
+        'timestamp': time.time()
     })
 
-@app.route('/suggest')
-def suggest():
-    """Otomatik tamamlama önerileri"""
-    query = request.args.get('q', '').strip()
-    if len(query) < 2:
-        return jsonify({'suggestions': []})
-    
-    suggestions = search_engine.get_suggestions(query)
-    return jsonify({'suggestions': suggestions})
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=10000, debug=False)
